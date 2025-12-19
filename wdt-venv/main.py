@@ -1,6 +1,8 @@
 import json
 import requests
 import subprocess
+import schedule
+import time
 from datetime import datetime
 
 class HtmlScraper:
@@ -33,11 +35,12 @@ class HtmlScraper:
         
             result = self.html_get()
 
-            for seperator in self.seperators:
-                if seperator.seperator == "" or result.find(seperator.seperator) == -1:
-                    continue
-
-            result = result.split(seperator.seperator)[0 if seperator.use_left_side else 1]
+            for sep in self.seperators:
+                if sep.seperator in result:
+                    parts = result.split(sep.seperator)
+                    if len(parts) < 2:
+                        continue
+                    result = parts[0] if sep.use_left_side else parts[1]
         except Exception as e:
             raise Exception(f"Failed to paarse result: {e}]")
         return result
@@ -111,7 +114,7 @@ class SignalMessenger:
         except Exception as e:
             raise Exception(f"Failed to send message: {e}")
 
-def main():
+def run():
     config = Config("config.json")
 
     if (not config.enabled): return
@@ -126,11 +129,17 @@ def main():
     url_scraper.seperators.append(HtmlScraper.Seperator('<a class="scene__title-link" href="', False))
     url_scraper.seperators.append(HtmlScraper.Seperator('"', True))
 
-    message = f'Das Wort des Tages vom {str(datetime.today().day) + "." + str(datetime.today().month) + "." + str(datetime.today().year)} ist "{word_scraper.result_get().replace("\xad", "")}". \n' + ''
-    'Mehr Infos unter: https://{config.base_url_get()}{url_scraper.result_get().replace("\xad", "")}'
+    message = f'Das Wort des Tages vom {str(datetime.today().day) + "." + str(datetime.today().month) + "." + str(datetime.today().year)} ist "{word_scraper.result_get().replace("\xad", "")}". \n' + 'Mehr Infos unter: https://{config.base_url_get()}{url_scraper.result_get().replace("\xad", "")}'
     messenger = SignalMessenger(sender_number=config.sender_phonenumber)
     messenger.send_message(config.recipent_phonenumbers, message)
 
     print(message)
 
-if __name__ == "__main__": main()
+def main():
+    schedule.every().day.at("08:00").do(run)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+if __name__ == "__main__": 
+    main()
