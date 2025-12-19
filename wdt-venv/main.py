@@ -1,5 +1,7 @@
 import json
 import requests
+import subprocess
+from datetime import datetime
 
 class HtmlScraper:
     class Seperator:
@@ -27,6 +29,9 @@ class HtmlScraper:
         result = self.html_get()
 
         for seperator in self.seperators:
+            if seperator.seperator == "" or result.find(seperator.seperator) == -1:
+                continue
+
             result = result.split(seperator.seperator)[0 if seperator.use_left_side else 1]
         
         return result
@@ -41,7 +46,7 @@ class Config:
         if (self.url.find("https://") == -1 and self.url.find("http://") == -1):
             return self.url.split("/")[1]
         
-        return self.url.split("//")[1].split("/")[0]
+        return self.url.split("//")[1].split("/")[0] + "/"
     
     def __init__(self, path):
         self.loadFromJson(path)
@@ -56,18 +61,60 @@ class Config:
             self.sender_phonenumber = data["sender_phonenumber"]
             self.recipent_phonenumbers = data["recipent_phonenumbers"]
 
+class SignalMessenger:
+    signalCLI_path = "signal-cli"
+    sender_number = ""
+
+    def __init__(self, signalCLI_path: str = "signal-cli", sender_number: str = ""):
+        self.signalCLI_path = signalCLI_path
+        self.sender_number = sender_number
+
+    def is_registered(self) -> bool:
+        result = subprocess.run(
+            [self.signalCLI_path, "-u", self.sender_number, "check", self.sender_number],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        output = result.stdout.strip()
+        error = result.stderr.strip()
+
+        if error:
+            print(f"Fehler: {error}")
+            return False
+
+        return "true" in output.lower()
+    
+    def send_message(self, recipient_numbers: list[str], message: str):
+        for recipient in recipient_numbers:
+            subprocess.run(
+                [self.signalCLI_path, "-u", self.sender_number, "send", recipient, "-m", message],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+
 def main():
     config = Config("config.json")
 
-    if (not config.enabled):
-        return
+    if (not config.enabled): return
 
-    scraper = HtmlScraper(config.url)
-    scraper.seperators.append(HtmlScraper.Seperator('a class="scene__title-link" href="/rechtschreibung', False))
-    scraper.seperators.append(HtmlScraper.Seperator('>', False))
-    scraper.seperators.append(HtmlScraper.Seperator('<', True))
+    word_scraper = HtmlScraper(config.url)
 
-    print("Wort des Tages: " + scraper.result_get())
+    word_scraper.seperators.append(HtmlScraper.Seperator('href="/rechtschreibung/', False))
+    word_scraper.seperators.append(HtmlScraper.Seperator('>', False))
+    word_scraper.seperators.append(HtmlScraper.Seperator('<', True))
 
-if __name__ == "__main__":
-    main()
+    url_scraper = HtmlScraper(config.url)
+    url_scraper.seperators.append(HtmlScraper.Seperator('<a class="scene__title-link" href="', False))
+    url_scraper.seperators.append(HtmlScraper.Seperator('"', True))
+
+    message = f'Das Wort des Tages vom {str(datetime.today().day) + "." + str(datetime.today().month) + "." + str(datetime.today().year)} ist "{word_scraper.result_get().replace("\xad", "")}". \n' + ''
+    'Mehr Infos unter: https://{config.base_url_get()}{url_scraper.result_get().replace("\xad", "")}'
+    messenger = SignalMessenger(sender_number=config.sender_phonenumber)
+    messenger.send_message(config.recipent_phonenumbers, message)
+
+    print(message)
+
+if __name__ == "__main__": main()

@@ -1,6 +1,6 @@
 {
     "url": "https://www.duden.de/wort-des-tages",
     "enabled": true,
-    "sender_phonenumber": "",
-    "recipent_phonenumbers": []
+    "sender_phonenumber": "+491781691259",
+    "recipent_phonenumbers": ["", ""]
 }
