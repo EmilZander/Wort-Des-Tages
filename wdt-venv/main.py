@@ -1,3 +1,4 @@
+import json
 import requests
 
 class HtmlScraper:
@@ -29,10 +30,39 @@ class HtmlScraper:
             result = result.split(seperator.seperator)[0 if seperator.use_left_side else 1]
         
         return result
+
+class Config:
+    url = ""
+    enabled = False
+    sender_phonenumber = ""
+    recipent_phonenumbers = []
+
+    def base_url_get(self):
+        if (self.url.find("https://") == -1 and self.url.find("http://") == -1):
+            return self.url.split("/")[1]
+        
+        return self.url.split("//")[1].split("/")[0]
     
+    def __init__(self, path):
+        self.loadFromJson(path)
+
+    def loadFromJson(self, path: str):
+
+        with open(path, "r") as file:
+            data = json.load(file)
+
+            self.url = data["url"]
+            self.enabled = data["enabled"]
+            self.sender_phonenumber = data["sender_phonenumber"]
+            self.recipent_phonenumbers = data["recipent_phonenumbers"]
 
 def main():
-    scraper = HtmlScraper("https://www.duden.de/wort-des-tages")
+    config = Config("config.json")
+
+    if (not config.enabled):
+        return
+
+    scraper = HtmlScraper(config.url)
     scraper.seperators.append(HtmlScraper.Seperator('a class="scene__title-link" href="/rechtschreibung', False))
     scraper.seperators.append(HtmlScraper.Seperator('>', False))
     scraper.seperators.append(HtmlScraper.Seperator('<', True))
